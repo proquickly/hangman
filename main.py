@@ -1,136 +1,167 @@
-# Importing the required libraries.
+# Importing the required modules.
 import random
 import string
 
+import kivy
 from kivy.app import App
 from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
 
+from words import WORDS
 
-class MainLayout(BoxLayout):
-    # Errors to keep track the number of errors.
-    ERRORS = StringProperty("")
+# Minimum kivy requirements.
+kivy.require("1.9.0")
 
-    # The path to hangman image.
-    HANGMAN_IMG = StringProperty("images/hangman0.png")
 
-    # The game message "Start the Game" or "Guess
-    # the Word" or "You Won" or "Game Over"
-    GAME_MSG = StringProperty("Start the Game")
-
-    # The random word place holder.
-    RANDOM_WORD_DISPLAY = StringProperty()
+class ButtonsLayout(GridLayout):
+    INSTANCES = []
 
     def __init__(self, **kwargs):
-        super(MainLayout, self).__init__(**kwargs)
+        super(ButtonsLayout, self).__init__(**kwargs)
 
-        # Random word to be guessed.
-        self.RANDOM_WORD = ""
+        # Adding self to the list of instances.
+        ButtonsLayout.INSTANCES.append(self)
 
-        # List of the guesses letters.
-        self.GUESSES = []
+        # Configuring the layout.
+        self.rows = 2
+        self.cols = 13
 
-        # Dictionary of alphabets buttons.
+        # Creating a dictionary for buttons.
         self.buttons = {}
 
+        # Creating the buttons.
+        self.create_buttons()
+
     def create_buttons(self):
-        # Creating a layout for the buttons.
-        buttons_layout = GridLayout(rows=2, cols=13, size_hint=(1, 0.5))
+        # Creating buttons for all the alphabets.
+        for alphabet in string.ascii_uppercase:
+            # Creating button.
+            button = Button(
+                text=alphabet,
+                font_name="fonts/Plaguard.otf",
+                font_size=24,
+            )
 
-        # Creating buttons for all the alphabets and
-        # adding them to the layout and dictionary.
-        for letter in string.ascii_uppercase:
-            button = Button(text=letter, on_press=lambda btn: self.btn_click(btn))
-            buttons_layout.add_widget(button)
-            self.buttons[letter] = button
+            # Adding button to the layout.
+            self.add_widget(button)
 
-        # Adding layout to the main layout.
-        self.add_widget(buttons_layout)
+            # Adding button to the dictionary.
+            self.buttons[alphabet] = button
 
-    def start_game(self, btn):
-        # Change the button text to Restart.
-        btn.text = "Restart"
 
-        # Creating the buttons if it doesn't exist.
-        if not self.buttons:
-            self.create_buttons()
+class MyRoot(BoxLayout):
+    ERRORS = StringProperty()
+    HANGMAN_IMG = StringProperty()
+    GAME_MSG = StringProperty()
+    WORD_DISPLAY = StringProperty()
 
-        # Getting a random word.
-        self.RANDOM_WORD = random.choice(WORDS)
+    def __init__(self, **kwargs):
+        super(MyRoot, self).__init__(**kwargs)
 
-        # Setting guesses to empty list.
+        # RANDOM_WORD for the word to be guessed.
+        self.RANDOM_WORD = ""
+
+        # List of all the guessed alphabets.
         self.GUESSES = []
 
-        # Changing the game message.
-        self.GAME_MSG = "Guess the Word"
+        # The layout of the available alphabets.
+        self.buttons_layout = ButtonsLayout.INSTANCES[0]
 
-        # Changing the image of the hangman.
-        self.HANGMAN_IMG = "images/hangman0.png"
+        # Configuring the buttons.
+        self.configure_buttons()
 
-        # Changing the display of the random word.
-        self.RANDOM_WORD_DISPLAY = "".join("_" for _ in str(self.RANDOM_WORD))
+        # Starting the game.
+        self.start_game()
 
-        # Setting errors to zero.
-        self.ERRORS = "0"
+    @property
+    def won(self):
+        return all(alphabet in self.GUESSES for alphabet in self.RANDOM_WORD)
 
-        # Enabling all the buttons.
-        for _, button in self.buttons.items():
-            button.disabled = False
+    def update_word_display(self):
+        # Updating display of the word.
+        WORD_DISPLAY = []
+        for alphabet in self.RANDOM_WORD:
+            if alphabet in self.GUESSES:
+                WORD_DISPLAY.append(alphabet)
+            else:
+                WORD_DISPLAY.append("_")
 
-    def btn_click(self, btn):
+        # Adding space between each character.
+        self.WORD_DISPLAY = " ".join(WORD_DISPLAY)
+
+    def btn_press(self, widget):
         # Disabling the button.
-        btn.disabled = True
+        widget.disabled = True
 
-        # Adding the letter to guesses.
-        self.GUESSES.append(btn.text)
+        # Adding the alphabet to the list of GUESSES.
+        self.GUESSES.append(widget.text)
 
-        # Checking if letter in random word.
-        if btn.text in self.RANDOM_WORD:
-            # Changing the display of the random word.
-            self.RANDOM_WORD_DISPLAY = ""
-            for letter in self.RANDOM_WORD:
-                if letter not in self.GUESSES:
-                    self.RANDOM_WORD_DISPLAY += "_"
-                else:
-                    self.RANDOM_WORD_DISPLAY += letter
+        if widget.text in self.RANDOM_WORD:
+            # Updating the word.
+            self.update_word_display()
+
+            if self.won:
+                # Disabling all the buttons.
+                for button in self.buttons_layout.buttons.values():
+                    button.disabled = True
+
+                # Changing the game message.
+                self.GAME_MSG = "You Won!!!"
         else:
-            # Adding 1 to errors.
+            # Adding 1 to the ERRORS.
             self.ERRORS = str(int(self.ERRORS) + 1)
 
-        # Changing the hangman image.
-        self.HANGMAN_IMG = "images/hangman" + self.ERRORS + ".png"
+            # Changing the hangman image.
+            self.HANGMAN_IMG = "images/hangman" + self.ERRORS + ".png"
 
-        # Checking if errors == 7, else
-        # Checking if word is guessed.
-        if int(self.ERRORS) == 7:
-            # Disabling the buttons.
-            for _, button in self.buttons.items():
-                button.disabled = True
+            # Checking if the game is over.
+            if int(self.ERRORS) == 7:
+                # Disabling all the buttons.
+                for button in self.buttons_layout.buttons.values():
+                    button.disabled = True
 
-            # Changing the game message.
-            self.GAME_MSG = "GAME OVER"
+                # Changing the game message.
+                self.GAME_MSG = "GAME OVER!!!"
 
-            # Changing the display of the random word.
-            self.RANDOM_WORD_DISPLAY = self.RANDOM_WORD
-        elif self.RANDOM_WORD_DISPLAY == self.RANDOM_WORD:
-            # Disabling the buttons.
-            for _, button in self.buttons.items():
-                button.disabled = True
+                # Changing the display of the word.
+                self.WORD_DISPLAY = self.RANDOM_WORD
 
-            # Changing the game message.
-            self.GAME_MSG = "YOU WON"
+    def configure_buttons(self):
+        # Bind all the buttons.
+        for button in self.buttons_layout.buttons.values():
+            button.on_press = lambda btn=button: self.btn_press(btn)
+
+    def start_game(self):
+        # Getting a Random Word.
+        self.RANDOM_WORD = random.choice(WORDS)
+
+        # Clearing the Guesses.
+        self.GUESSES.clear()
+
+        # Changing the ERRORS to 0.
+        self.ERRORS = "0"
+
+        # Changing the Hangman Image.
+        self.HANGMAN_IMG = "images/hangman0.png"
+
+        # Changing the GAME_MSG.
+        self.GAME_MSG = "Guess the word"
+
+        # Changing the word display.
+        self.WORD_DISPLAY = " ".join(["_" for _ in self.RANDOM_WORD])
+
+        # Enabling all the buttons.
+        for button in self.buttons_layout.buttons.values():
+            button.disabled = False
 
 
 class Hangman(App):
-    pass
+
+    def build(self):
+        return MyRoot()
 
 
-# Loading the words.
-with open("words.txt", "r") as file:
-    WORDS = [word.strip() for word in file.readlines()]
-
-# Creating the app and running it.
-app = Hangman()
-app.run()
+hangman = Hangman()
+hangman.run()
